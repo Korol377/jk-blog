@@ -5,10 +5,11 @@ import mongoose from 'mongoose';
 import { validationResult } from 'express-validator';
 import { registerValidation } from './validations/auth.js';
 import UserModel from './models/User.js'
+import User from './models/User.js';
 
 
 mongoose
-.connect('mongodb+srv://admin:wwwwww@cluster0.zayboem.mongodb.net/?retryWrites=true&w=majority')
+.connect('mongodb+srv://admin:wwwwww@cluster0.zayboem.mongodb.net/blog?retryWrites=true&w=majority')
 .then(() => console.log('DB is OK'))
 .catch((err) => console.log('DB error', err));
 
@@ -16,32 +17,101 @@ const app = express();
 
 app.use(express.json());
 
-app.post('/auth/register', registerValidation, async (req, res) => {
-    const errors = validationResult(req);
-    
+app.post('/auth/login', async (req, res) =>{
+    try {
+        const user = await UserModel.findOne({ email: req.body.email })
+        
+        if (!user){
+            return res.status(404).json({
+                message: 'Користувач не знайдений',
+            })
+        }
 
-    if (!errors.isEmpty()) {
-        return res.status(400).json(errors.array());
+        const isValidPass = await bcrypt.compare(req.body.password, user._doc.passwordHash);
+
+        if (!isValidPass){
+            return res.status(400).json({
+                message: 'Невірний логін або пароль',
+            })
+        }
+
+        const token = jwt.sign({
+            _id: user._id,
+        },
+            'secret123',
+            {
+                expiresIn: '30d',
+            },
+        );
+
+        const { passwordHash, ...userData } = user._doc;
+
+        res.json({
+            ...userData,
+            token,
+        });
+    } 
+    catch (err) {
+        console.log(err);
+        res.status(500).json({
+            message: 'Не вдалось авторизуватись',
+        });
     }
+})
 
-    // Шифрування паролю 
-    const password = req.body.password;
-    // Алгоритм шифрування bcrypt
-    const salt = await  bcrypt.genSalt(10);
-    
-    const passwordHash = await bcrypt.hash(password, salt); 
+app.post('/auth/register', registerValidation, async (req, res) => {
+    try{
+        const errors = validationResult(req);
 
-    const doc = new UserModel({
-        email: req.body.email,
-        fullName: req.body.fullName,
-        avatarUrl: req.body.avatarUrl,
-        passwordHash
-    })
 
-    const user = await doc.save();
+        if (!errors.isEmpty()) {
+            return res.status(400).json(errors.array());
+        }
 
-    res.json(user);
+        // Шифрування паролю 
+        const password = req.body.password;
+        // Алгоритм шифрування bcrypt
+        const salt = await bcrypt.genSalt(10);
+
+        const hash = await bcrypt.hash(password, salt);
+
+        const doc = new UserModel({
+            email: req.body.email,
+            fullName: req.body.fullName,
+            avatarUrl: req.body.avatarUrl,
+            passwordHash: hash,
+        });
+
+        const user = await doc.save();
+
+        const token = jwt.sign({
+            _id: user._id,
+        }, 
+        'secret123',
+        {
+            expiresIn: '30d',
+        },
+        );
+
+        const { passwordHash, ...userData} = user._doc; 
+
+        res.json({
+            ...userData,
+            token,
+        });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({
+            message: 'Не вдалось зареєструватись',
+        });
+    }
 });
+
+app.get('/auth/me', (req, res) => {
+    try {
+        
+    } catch (err) {}
+})
 
 app.listen(4444, (err) => {
     if (err){
