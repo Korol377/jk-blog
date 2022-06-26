@@ -6,13 +6,6 @@ import { validationResult } from 'express-validator';
 
 export const register = async (req, res) => {
     try {
-        const errors = validationResult(req);
-
-
-        if (!errors.isEmpty()) {
-            return res.status(400).json(errors.array());
-        }
-
         // Шифрування паролю 
         const password = req.body.password;
         // Алгоритм шифрування bcrypt
